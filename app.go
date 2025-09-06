@@ -182,13 +182,12 @@ func (a *App) UpdateAutoReplyConfig(config *whatsapp.AutoReplyConfig) error {
 func (a *App) TestAIConnection(provider string) (string, error) {
 	return a.waManager.TestAIConnection(provider)
 }
-
 // GetContacts retrieves all WhatsApp contacts
 func (a *App) GetContacts() ([]whatsapp.Contact, error) {
 	return a.waManager.GetContacts()
 }
 
-// GetContactInfo retrieves detailed information for a specific contact
+// GetContactInfo retrieves information about a specific contact
 func (a *App) GetContactInfo(jid string) (*whatsapp.ContactInfo, error) {
 	return a.waManager.GetContactInfo(jid)
 }

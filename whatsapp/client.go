@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	waProto "go.mau.fi/whatsmeow/binary/proto"
+	"github.com/skip2/go-qrcode"
 	"go.mau.fi/whatsmeow"
+	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
-	"github.com/skip2/go-qrcode"
 )
 
 type Manager struct {
@@ -149,25 +149,30 @@ func (m *Manager) handleEvent(evt interface{}) {
 	switch v := evt.(type) {
 	case *events.Message:
 		// Store incoming message in database
+		fmt.Println("Incoming message:", v)
 		if err := m.messageDB.StoreMessageFromEvent(v); err != nil {
 			m.log.Errorf("Failed to store message: %v", err)
 		}
-		
-		// Handle auto-reply if enabled (placeholder for now)
-		// TODO: Implement proper auto-reply integration
-		
+
+		// Handle auto-reply if enabled
+		if m.autoReply != nil {
+			if err := m.autoReply.ProcessIncomingMessage(v, m); err != nil {
+				m.log.Errorf("Failed to process auto-reply: %v", err)
+			}
+		}
+
 	case *events.Connected:
 		m.eventChan <- ConnectionEvent{
 			Type:    "connected",
 			Message: "WhatsApp connected successfully",
 		}
-		
+
 	case *events.Disconnected:
 		m.eventChan <- ConnectionEvent{
-			Type:    "disconnected", 
+			Type:    "disconnected",
 			Message: "WhatsApp disconnected",
 		}
-		
+
 	case *events.QR:
 		// Generate QR code and send to channel
 		qrString := v.Codes[0]
@@ -176,10 +181,10 @@ func (m *Manager) handleEvent(evt interface{}) {
 			m.log.Errorf("Failed to generate QR code: %v", err)
 			return
 		}
-		
+
 		qrBase64 := base64.StdEncoding.EncodeToString(png)
 		m.qrChan <- qrBase64
-		
+
 		m.eventChan <- ConnectionEvent{
 			Type:    "qr",
 			Message: "QR code generated",
@@ -403,7 +408,7 @@ func (m *Manager) getChatsFromMessageDB() ([]Chat, error) {
 	for _, stored := range storedChats {
 		// Get last message for display
 		lastMsg, _ := m.messageDB.GetLastMessage(stored.JID)
-		
+
 		lastText := "No messages"
 		timeStr := ""
 		if lastMsg != nil {
@@ -461,30 +466,30 @@ func (m *Manager) getDemoChats() ([]Chat, error) {
 			IsGroup: true,
 		},
 	}
-	
+
 	return demoChats, nil
 }
 
 func (m *Manager) formatMessageTime(timestamp int64) string {
 	msgTime := time.Unix(timestamp, 0)
 	now := time.Now()
-	
+
 	// If today, show time
 	if msgTime.Format("2006-01-02") == now.Format("2006-01-02") {
 		return msgTime.Format("15:04")
 	}
-	
+
 	// If yesterday
 	yesterday := now.AddDate(0, 0, -1)
 	if msgTime.Format("2006-01-02") == yesterday.Format("2006-01-02") {
 		return "Yesterday"
 	}
-	
+
 	// If this week, show day name
 	if msgTime.After(now.AddDate(0, 0, -7)) {
 		return msgTime.Format("Monday")
 	}
-	
+
 	// Otherwise show date
 	return msgTime.Format("02/01")
 }
@@ -597,7 +602,7 @@ func (m *Manager) getDemoMessages() ([]Message, error) {
 			Type:   "text",
 		},
 		{
-			ID:     "msg2", 
+			ID:     "msg2",
 			ChatID: "demo",
 			Author: "Me",
 			Text:   "I'm doing great, thanks for asking!",
@@ -608,7 +613,7 @@ func (m *Manager) getDemoMessages() ([]Message, error) {
 		{
 			ID:     "msg3",
 			ChatID: "demo",
-			Author: "John Doe", 
+			Author: "John Doe",
 			Text:   "That's wonderful to hear!",
 			Time:   "10:35",
 			IsMine: false,
@@ -635,7 +640,7 @@ func (m *Manager) getContactName(jid string) string {
 			}
 		}
 	}
-	
+
 	// Fallback to JID or phone number
 	if len(jid) > 0 && jid != "me" {
 		// Extract phone number from JID
@@ -644,7 +649,7 @@ func (m *Manager) getContactName(jid string) string {
 		}
 		return jid
 	}
-	
+
 	return "Unknown"
 }
 
@@ -700,9 +705,6 @@ func (m *Manager) TestAIConnection(provider string) (string, error) {
 		return "", fmt.Errorf("auto-reply not initialized")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
 	testMessage := "Hello, this is a test message."
 
 	// Temporarily override provider for testing
@@ -712,7 +714,7 @@ func (m *Manager) TestAIConnection(provider string) (string, error) {
 		m.autoReply.config.AIProvider = originalProvider
 	}()
 
-	response, err := m.autoReply.GenerateAIResponse(ctx, testMessage)
+	response, err := m.autoReply.generateAIResponse(testMessage)
 	if err != nil {
 		return "", fmt.Errorf("AI connection test failed: %v", err)
 	}
@@ -875,7 +877,6 @@ func (m *Manager) Close() error {
 
 	return nil
 }
-
 
 // Scheduler methods
 
