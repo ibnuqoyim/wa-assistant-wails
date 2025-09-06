@@ -1,0 +1,2 @@
+- connect qr code
+- autoconnect

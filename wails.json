@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "wa-bot-wails",
+  "outputfilename": "wa-bot-wails",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "Muhamad Ibnu qoyim",
+    "email": "muhamadibnu9@gmail.com"
+  }
+}
