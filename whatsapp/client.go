@@ -97,6 +97,7 @@ type GroupInfo struct {
 }
 
 func NewManager(dbPath string) (*Manager, error) {
+	fmt.Println("Initializing WhatsApp manager...")
 	// Initialize database
 	container, err := sqlstore.New(context.Background(), "sqlite3", "file:"+dbPath+"?_foreign_keys=on", waLog.Noop)
 	if err != nil {
@@ -146,6 +147,7 @@ func NewManager(dbPath string) (*Manager, error) {
 
 // handleEvent handles WhatsApp events including incoming messages
 func (m *Manager) handleEvent(evt interface{}) {
+	fmt.Println("Event received:", evt)
 	switch v := evt.(type) {
 	case *events.Message:
 		// Store incoming message in database
@@ -154,8 +156,10 @@ func (m *Manager) handleEvent(evt interface{}) {
 			m.log.Errorf("Failed to store message: %v", err)
 		}
 
+		fmt.Println("Message stored successfully")
 		// Handle auto-reply if enabled
 		if m.autoReply != nil {
+			fmt.Println("Message will be processed for auto-reply")
 			if err := m.autoReply.ProcessIncomingMessage(v, m); err != nil {
 				m.log.Errorf("Failed to process auto-reply: %v", err)
 			}
@@ -280,6 +284,19 @@ func (m *Manager) StartNewConnection() error {
 func (m *Manager) addEventHandlers() {
 	m.client.AddEventHandler(func(evt interface{}) {
 		switch v := evt.(type) {
+		case *events.Message:
+			// Store incoming message in database
+			if err := m.messageDB.StoreMessageFromEvent(v); err != nil {
+				m.log.Errorf("Failed to store message: %v", err)
+			}
+			fmt.Println("Message stored successfully")
+			// Handle auto-reply if enabled
+			if m.autoReply != nil {
+				fmt.Println("Message will be processed for auto-reply")
+				if err := m.autoReply.ProcessIncomingMessage(v, m); err != nil {
+					m.log.Errorf("Failed to process auto-reply: %v", err)
+				}
+			}
 		case *events.Connected:
 			m.eventChan <- ConnectionEvent{
 				Type:    "connected",

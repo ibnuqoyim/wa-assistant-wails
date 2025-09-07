@@ -182,6 +182,7 @@ func (a *App) UpdateAutoReplyConfig(config *whatsapp.AutoReplyConfig) error {
 func (a *App) TestAIConnection(provider string) (string, error) {
 	return a.waManager.TestAIConnection(provider)
 }
+
 // GetContacts retrieves all WhatsApp contacts
 func (a *App) GetContacts() ([]whatsapp.Contact, error) {
 	return a.waManager.GetContacts()
@@ -222,4 +223,8 @@ func (a *App) UpdateScheduledTask(taskID string, task *whatsapp.ScheduledTask) e
 // GetSchedulerStats returns scheduler statistics
 func (a *App) GetSchedulerStats() map[string]interface{} {
 	return a.waManager.GetSchedulerStats()
+}
+
+func (a *App) SendMessage(chatID, text string) error {
+	return a.waManager.SendMessage(chatID, text)
 }

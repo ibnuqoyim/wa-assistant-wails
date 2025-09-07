@@ -141,6 +141,7 @@ func (arm *AutoReplyManager) ProcessIncomingMessage(evt *events.Message, manager
 
 // shouldReply determines if we should reply to this message
 func (arm *AutoReplyManager) shouldReply(evt *events.Message) bool {
+	fmt.Println(arm.config)
 	if arm.config == nil || !arm.config.Enabled {
 		return false
 	}

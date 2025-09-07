@@ -2,7 +2,7 @@ import { computed, reactive, ref, onMounted } from 'vue'
 
 // Import Wails runtime for events
 import { EventsOn } from '../../wailsjs/runtime/runtime'
-import { CheckWhatsAppConnection, ConnectExistingDevice, StartNewConnection, RequestPairingCode, GetConnectionStatus, GetChats, GetMessages } from '../../wailsjs/go/main/App'
+import { CheckWhatsAppConnection, ConnectExistingDevice, StartNewConnection, RequestPairingCode, GetConnectionStatus, GetChats, GetMessages, SendMessage } from '../../wailsjs/go/main/App'
 import { whatsapp } from '../../wailsjs/go/models'
 
 
@@ -248,27 +248,43 @@ function selectChat(id: number) {
   loadMessages(id)
 }
 
-function sendMessage() {
-  if (!draft.value.trim()) return
+async function sendMessage() {
+  if (!draft.value.trim() || !activeChat.value?.chatId) return
   
+  const messageText = draft.value
+  const time = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+  
+  // Create message object for frontend
   const newMessage: FrontendMessage = {
     id: Date.now(),
     author: 'Me',
-    text: draft.value,
-    time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+    text: messageText,
+    time: time,
     mine: true
   }
   
-  if (!messagesByChat[selectedId.value]) {
-    messagesByChat[selectedId.value] = []
-  }
-  messagesByChat[selectedId.value].push(newMessage)
-  
-  draft.value = ''
-  const chat = chats.value.find(c => c.id === selectedId.value); 
-  if (chat) { 
-    chat.last = newMessage.text; 
-    chat.time = newMessage.time 
+  try {
+    // Send message to backend
+    await SendMessage(activeChat.value.chatId, messageText)
+    
+    // Update frontend state
+    if (!messagesByChat[selectedId.value]) {
+      messagesByChat[selectedId.value] = []
+    }
+    messagesByChat[selectedId.value].push(newMessage)
+    
+    // Update chat preview
+    const chat = chats.value.find(c => c.id === selectedId.value)
+    if (chat) {
+      chat.last = messageText
+      chat.time = time
+    }
+    
+    // Clear draft
+    draft.value = ''
+  } catch (error) {
+    console.error('Failed to send message:', error)
+    // You might want to show an error notification to the user here
   }
 }
 

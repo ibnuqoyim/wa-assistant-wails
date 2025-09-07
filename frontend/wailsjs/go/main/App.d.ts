@@ -36,6 +36,8 @@ export function RemoveScheduledTask(arg1:string):Promise<void>;
 
 export function RequestPairingCode(arg1:string):Promise<string>;
 
+export function SendMessage(arg1:string,arg2:string):Promise<void>;
+
 export function StartNewConnection():Promise<void>;
 
 export function TestAIConnection(arg1:string):Promise<string>;

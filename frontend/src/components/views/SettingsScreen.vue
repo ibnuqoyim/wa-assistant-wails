@@ -110,11 +110,13 @@
               type="tel" 
               v-model="config.whitelist_numbers[index]"
               placeholder="81234567890"
-              @blur="saveConfig"
+              @input="updateWhitelist"
+              pattern="[0-9]*"
+              inputmode="numeric"
             >
-            <button @click="removeNumber(index)" class="remove-btn">×</button>
+            <button @click="removeNumber(index)" class="remove-btn" type="button">×</button>
           </div>
-          <button @click="addNumber" class="add-btn">+ Add Number</button>
+          <button @click="addNumber" class="add-btn" type="button">+ Add Number</button>
         </div>
       </div>
 
@@ -188,11 +190,19 @@ const config = ref<AutoReplyConfig>({
   openai_model: 'gpt-3.5-turbo',
   ollama_url: 'http://localhost:11434',
   ollama_model: 'llama2',
-  whitelist_numbers: [],
+  whitelist_numbers: [], // This will be populated from backend
   system_prompt: 'You are a helpful WhatsApp assistant. Respond briefly and helpfully to messages.',
   response_delay: 2,
   max_response_length: 500
 })
+
+// Validate phone number format
+const validatePhoneNumber = (number: string): boolean => {
+  // Remove any non-digit characters
+  const digits = number.replace(/\D/g, '')
+  // Check if it's a valid length (adjust min/max as needed)
+  return digits.length >= 10 && digits.length <= 15
+}
 
 const testing = ref(false)
 const testResult = ref<{success: boolean, message: string} | null>(null)
@@ -237,13 +247,38 @@ const testConnection = async (provider: string) => {
   }
 }
 
-const addNumber = () => {
+const addNumber = async () => {
+  if (!config.value.whitelist_numbers) {
+    config.value.whitelist_numbers = []
+  }
   config.value.whitelist_numbers.push('')
+  // Save after adding to ensure it's persisted to backend
+  await saveConfig()
 }
 
-const removeNumber = (index: number) => {
+const removeNumber = async (index: number) => {
   config.value.whitelist_numbers.splice(index, 1)
-  saveConfig()
+  await saveConfig()
+}
+
+// Watch for changes in individual whitelist numbers
+const updateWhitelist = async () => {
+  try {
+    // Filter out any empty numbers before saving
+    config.value.whitelist_numbers = config.value.whitelist_numbers.filter(number => number.trim() !== '')
+    
+    // Validate all numbers
+    const invalidNumbers = config.value.whitelist_numbers.filter(number => !validatePhoneNumber(number))
+    if (invalidNumbers.length > 0) {
+      console.warn('Invalid phone numbers detected:', invalidNumbers)
+      // You might want to show an error message to the user here
+      return
+    }
+    
+    await saveConfig()
+  } catch (error) {
+    console.error('Failed to save whitelist:', error)
+  }
 }
 </script>
 
