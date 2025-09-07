@@ -94,6 +94,13 @@ func (arm *AutoReplyManager) ProcessIncomingMessage(evt *events.Message, manager
 
 	// Add delay before responding (run in goroutine to not block)
 	go func() {
+		chatJID := evt.Info.Chat.String()
+
+		// Show typing indicator before delay
+		if err := manager.SendChatPresence(chatJID, types.ChatPresenceComposing); err != nil {
+			fmt.Printf("Failed to send typing status: %v\n", err)
+		}
+
 		if arm.config.ResponseDelay > 0 {
 			time.Sleep(time.Duration(arm.config.ResponseDelay) * time.Second)
 		}
@@ -104,6 +111,11 @@ func (arm *AutoReplyManager) ProcessIncomingMessage(evt *events.Message, manager
 		var err error
 
 		for attempt := 1; attempt <= maxRetries; attempt++ {
+			// Keep typing status active
+			if err := manager.SendChatPresence(chatJID, types.ChatPresenceComposing); err != nil {
+				fmt.Printf("Failed to send typing status: %v\n", err)
+			}
+
 			response, err = arm.generateAIResponse(messageText)
 			if err == nil {
 				break
@@ -121,9 +133,18 @@ func (arm *AutoReplyManager) ProcessIncomingMessage(evt *events.Message, manager
 			if attempt < maxRetries {
 				time.Sleep(time.Duration(attempt*5) * time.Second)
 			}
+
+			// Keep typing status active during retry delay
+			if err := manager.SendChatPresence(chatJID, types.ChatPresenceComposing); err != nil {
+				fmt.Printf("Failed to send typing status: %v\n", err)
+			}
 		}
 
+		// Clear typing status in case of error
 		if err != nil {
+			if err := manager.SendChatPresence(chatJID, types.ChatPresencePaused); err != nil {
+				fmt.Printf("Failed to clear typing status: %v\n", err)
+			}
 			fmt.Printf("Failed to generate AI response after %d attempts: %v\n", maxRetries, err)
 			return
 		}
@@ -131,6 +152,16 @@ func (arm *AutoReplyManager) ProcessIncomingMessage(evt *events.Message, manager
 		// Send response via WhatsApp
 		if err := manager.SendMessage(evt.Info.Chat.String(), response); err != nil {
 			fmt.Printf("Failed to send AI response: %v\n", err)
+			// Clear typing status in case of send error
+			if err := manager.SendChatPresence(chatJID, types.ChatPresencePaused); err != nil {
+				fmt.Printf("Failed to clear typing status: %v\n", err)
+			}
+			return
+		}
+
+		// Clear typing status after successful send
+		if err := manager.SendChatPresence(chatJID, types.ChatPresencePaused); err != nil {
+			fmt.Printf("Failed to clear typing status: %v\n", err)
 		}
 	}()
 

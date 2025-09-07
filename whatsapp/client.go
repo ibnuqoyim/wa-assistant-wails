@@ -672,6 +672,26 @@ func (m *Manager) getContactName(jid string) string {
 }
 
 // SendMessage sends a text message to a specific chat
+// SendChatPresence sends chat presence (typing, etc) to a chat
+func (m *Manager) SendChatPresence(chatJID string, presence types.ChatPresence) error {
+	if m.client == nil || !m.client.IsConnected() {
+		return fmt.Errorf("WhatsApp client not connected")
+	}
+
+	// Parse JID
+	jid, err := types.ParseJID(chatJID)
+	if err != nil {
+		return fmt.Errorf("invalid chat ID: %v", err)
+	}
+
+	err = m.client.SendChatPresence(jid, presence, types.ChatPresenceMediaText)
+	if err != nil {
+		return fmt.Errorf("failed to send presence: %v", err)
+	}
+
+	return nil
+}
+
 func (m *Manager) SendMessage(chatID, text string) error {
 	if m.client == nil || !m.client.IsConnected() {
 		return fmt.Errorf("WhatsApp client not connected")
