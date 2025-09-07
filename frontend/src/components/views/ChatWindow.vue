@@ -22,14 +22,7 @@
 <Composer v-model="draftLocal" @send="emit('send')" />
 
 
-<div class="infobar" v-if="showInfo">
-<div>You were added by someone who's not in your contacts</div>
-<div class="actions">
-<button class="pill">Exit group</button>
-<button class="pill">Report</button>
-<button class="pill primary" @click="emit('hide-info')">OK</button>
-</div>
-</div>
+
 </section>
 </template>
 <script setup lang="ts">

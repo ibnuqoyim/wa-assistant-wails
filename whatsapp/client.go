@@ -97,7 +97,6 @@ type GroupInfo struct {
 }
 
 func NewManager(dbPath string) (*Manager, error) {
-	fmt.Println("Initializing WhatsApp manager...")
 	// Initialize database
 	container, err := sqlstore.New(context.Background(), "sqlite3", "file:"+dbPath+"?_foreign_keys=on", waLog.Noop)
 	if err != nil {
@@ -128,8 +127,16 @@ func NewManager(dbPath string) (*Manager, error) {
 		messageDB: messageDB,
 	}
 
-	// Initialize auto-reply manager
-	manager.autoReply = NewAutoReplyManager(&AutoReplyConfig{})
+	// Load configuration from database
+	config, err := messageDB.LoadConfig()
+	if err != nil {
+		// Log error but don't fail initialization
+		fmt.Printf("Failed to load config from database: %v, using defaults\n", err)
+		config = GetDefaultAutoReplyConfig()
+	}
+
+	// Initialize auto-reply manager with loaded config
+	manager.autoReply = NewAutoReplyManager(config)
 
 	// Initialize scheduler
 	manager.scheduler = NewScheduler(manager, log.New(os.Stdout, "[Scheduler] ", log.LstdFlags))
@@ -147,19 +154,15 @@ func NewManager(dbPath string) (*Manager, error) {
 
 // handleEvent handles WhatsApp events including incoming messages
 func (m *Manager) handleEvent(evt interface{}) {
-	fmt.Println("Event received:", evt)
 	switch v := evt.(type) {
 	case *events.Message:
 		// Store incoming message in database
-		fmt.Println("Incoming message:", v)
 		if err := m.messageDB.StoreMessageFromEvent(v); err != nil {
 			m.log.Errorf("Failed to store message: %v", err)
 		}
 
-		fmt.Println("Message stored successfully")
 		// Handle auto-reply if enabled
 		if m.autoReply != nil {
-			fmt.Println("Message will be processed for auto-reply")
 			if err := m.autoReply.ProcessIncomingMessage(v, m); err != nil {
 				m.log.Errorf("Failed to process auto-reply: %v", err)
 			}
@@ -289,10 +292,8 @@ func (m *Manager) addEventHandlers() {
 			if err := m.messageDB.StoreMessageFromEvent(v); err != nil {
 				m.log.Errorf("Failed to store message: %v", err)
 			}
-			fmt.Println("Message stored successfully")
 			// Handle auto-reply if enabled
 			if m.autoReply != nil {
-				fmt.Println("Message will be processed for auto-reply")
 				if err := m.autoReply.ProcessIncomingMessage(v, m); err != nil {
 					m.log.Errorf("Failed to process auto-reply: %v", err)
 				}
@@ -688,9 +689,61 @@ func (m *Manager) SendMessage(chatID, text string) error {
 	}
 
 	// Send message
-	_, err = m.client.SendMessage(context.Background(), jid, msg)
+	response, err := m.client.SendMessage(context.Background(), jid, msg)
 	if err != nil {
 		return fmt.Errorf("failed to send message: %v", err)
+	}
+
+	// Store the sent message in the database
+	if m.messageDB != nil {
+		now := time.Now()
+		storedMsg := &StoredMessage{
+			ID:          response.ID,
+			ChatJID:     jid.String(),
+			SenderJID:   "me",
+			MessageType: "text",
+			Content:     text,
+			Timestamp:   now.Unix(),
+			IsFromMe:    true,
+			IsGroup:     jid.Server == "g.us",
+			CreatedAt:   now,
+		}
+
+		err = m.messageDB.StoreDirectMessage(storedMsg)
+		if err != nil {
+			// Log the error but don't fail the send operation
+			m.log.Errorf("Failed to store sent message in database: %v", err)
+		}
+
+		// Update chat in database
+		chatName := jid.User
+		if jid.Server == "g.us" {
+			if groupInfo, err := m.client.GetGroupInfo(jid); err == nil && groupInfo.Name != "" {
+				chatName = groupInfo.Name
+			}
+		} else {
+			// For private chats, try to get contact name
+			if contact, err := m.client.Store.Contacts.GetContact(context.Background(), jid); err == nil && contact.Found {
+				if contact.PushName != "" {
+					chatName = contact.PushName
+				} else if contact.BusinessName != "" {
+					chatName = contact.BusinessName
+				}
+			}
+		}
+
+		chat := &StoredChat{
+			JID:             jid.String(),
+			Name:            chatName,
+			IsGroup:         jid.Server == "g.us",
+			LastMessageID:   response.ID,
+			LastMessageTime: now.Unix(),
+			UpdatedAt:       now,
+		}
+
+		if err := m.messageDB.UpsertChat(chat); err != nil {
+			m.log.Errorf("Failed to update chat in database: %v", err)
+		}
 	}
 
 	return nil
@@ -698,22 +751,43 @@ func (m *Manager) SendMessage(chatID, text string) error {
 
 // Auto-reply methods
 
-// GetAutoReplyConfig returns the current auto-reply configuration
+// GetAutoReplyConfig returns the current auto-reply configuration from database
 func (m *Manager) GetAutoReplyConfig() *AutoReplyConfig {
-	if m.autoReply == nil {
+	if m.messageDB == nil {
 		return GetDefaultAutoReplyConfig()
 	}
-	return m.autoReply.config
-}
 
-// UpdateAutoReplyConfig updates the auto-reply configuration
-func (m *Manager) UpdateAutoReplyConfig(config *AutoReplyConfig) error {
+	config, err := m.messageDB.LoadConfig()
+	if err != nil {
+		m.log.Errorf("Failed to load config from database: %v", err)
+		return GetDefaultAutoReplyConfig()
+	}
+
+	// Update the autoReply manager with the loaded config
 	if m.autoReply == nil {
 		m.autoReply = NewAutoReplyManager(config)
 	} else {
 		m.autoReply.UpdateConfig(config)
 	}
-	return nil
+
+	return config
+}
+
+// UpdateAutoReplyConfig updates the auto-reply configuration and saves to database
+func (m *Manager) UpdateAutoReplyConfig(config *AutoReplyConfig) error {
+	if m.messageDB == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	// Update the autoReply manager
+	if m.autoReply == nil {
+		m.autoReply = NewAutoReplyManager(config)
+	} else {
+		m.autoReply.UpdateConfig(config)
+	}
+
+	// Save to database
+	return m.messageDB.SaveConfig(config)
 }
 
 // TestAIConnection tests the AI connection with current settings

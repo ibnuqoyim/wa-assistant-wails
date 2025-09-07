@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	_ "github.com/mattn/go-sqlite3"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/types/events"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 // MessageDB handles message database operations
@@ -70,6 +70,23 @@ func (m *MessageDB) createTables() error {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE TABLE IF NOT EXISTS config (
+			id TEXT PRIMARY KEY,
+			enabled BOOLEAN NOT NULL DEFAULT 0,
+			ai_provider TEXT NOT NULL,
+			openai_api_key TEXT,
+			openai_model TEXT,
+			ollama_url TEXT,
+			ollama_model TEXT,
+			system_prompt TEXT,
+			response_delay INTEGER NOT NULL DEFAULT 2,
+			max_response_length INTEGER NOT NULL DEFAULT 500,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS whitelist_numbers (
+			phone_number TEXT PRIMARY KEY,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
 	}
 
 	for _, query := range queries {
@@ -82,6 +99,100 @@ func (m *MessageDB) createTables() error {
 }
 
 // StoredMessage represents a message stored in database
+// SaveConfig saves the auto-reply configuration to the database
+func (m *MessageDB) SaveConfig(config *AutoReplyConfig) error {
+	// First, clear existing whitelist numbers
+	_, err := m.db.Exec("DELETE FROM whitelist_numbers")
+	if err != nil {
+		return fmt.Errorf("failed to clear whitelist numbers: %v", err)
+	}
+
+	// Insert new whitelist numbers
+	for _, number := range config.WhitelistNumbers {
+		_, err := m.db.Exec("INSERT INTO whitelist_numbers (phone_number) VALUES (?)", number)
+		if err != nil {
+			return fmt.Errorf("failed to insert whitelist number: %v", err)
+		}
+	}
+
+	// Save main configuration
+	_, err = m.db.Exec(`
+		INSERT OR REPLACE INTO config (
+			id, enabled, ai_provider, openai_api_key, openai_model,
+			ollama_url, ollama_model, system_prompt,
+			response_delay, max_response_length, updated_at
+		) VALUES (
+			'default', ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
+		)`,
+		config.Enabled,
+		config.AIProvider,
+		config.OpenAIAPIKey,
+		config.OpenAIModel,
+		config.OllamaURL,
+		config.OllamaModel,
+		config.SystemPrompt,
+		config.ResponseDelay,
+		config.MaxResponseLength,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to save config: %v", err)
+	}
+
+	return nil
+}
+
+// LoadConfig loads the auto-reply configuration from the database
+func (m *MessageDB) LoadConfig() (*AutoReplyConfig, error) {
+	var config AutoReplyConfig
+
+	// Load main configuration
+	err := m.db.QueryRow(`
+		SELECT 
+			enabled, ai_provider, openai_api_key, openai_model,
+			ollama_url, ollama_model, system_prompt,
+			response_delay, max_response_length
+		FROM config 
+		WHERE id = 'default'
+	`).Scan(
+		&config.Enabled,
+		&config.AIProvider,
+		&config.OpenAIAPIKey,
+		&config.OpenAIModel,
+		&config.OllamaURL,
+		&config.OllamaModel,
+		&config.SystemPrompt,
+		&config.ResponseDelay,
+		&config.MaxResponseLength,
+	)
+
+	if err == sql.ErrNoRows {
+		// Return default config if no configuration exists
+		return GetDefaultAutoReplyConfig(), nil
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to load config: %v", err)
+	}
+
+	// Load whitelist numbers
+	rows, err := m.db.Query("SELECT phone_number FROM whitelist_numbers")
+	if err != nil {
+		return nil, fmt.Errorf("failed to load whitelist numbers: %v", err)
+	}
+	defer rows.Close()
+
+	var numbers []string
+	for rows.Next() {
+		var number string
+		if err := rows.Scan(&number); err != nil {
+			return nil, fmt.Errorf("failed to scan whitelist number: %v", err)
+		}
+		numbers = append(numbers, number)
+	}
+
+	config.WhitelistNumbers = numbers
+	return &config, nil
+}
+
 type StoredMessage struct {
 	ID              string    `json:"id"`
 	ChatJID         string    `json:"chatJid"`
@@ -96,6 +207,58 @@ type StoredMessage struct {
 	IsGroup         bool      `json:"isGroup"`
 	QuotedMessageID string    `json:"quotedMessageId,omitempty"`
 	CreatedAt       time.Time `json:"createdAt"`
+}
+
+// StoreDirectMessage stores a message directly in the database
+func (m *MessageDB) StoreDirectMessage(msg *StoredMessage) error {
+	query := `INSERT INTO messages 
+		(id, chat_jid, sender_jid, message_type, content, media_path, media_type, caption, 
+		timestamp, is_from_me, is_group, quoted_message_id, created_at) 
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err := m.db.Exec(query,
+		msg.ID,
+		msg.ChatJID,
+		msg.SenderJID,
+		msg.MessageType,
+		msg.Content,
+		msg.MediaPath,
+		msg.MediaType,
+		msg.Caption,
+		msg.Timestamp,
+		msg.IsFromMe,
+		msg.IsGroup,
+		msg.QuotedMessageID,
+		msg.CreatedAt,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to store message: %v", err)
+	}
+
+	return nil
+}
+
+// UpsertChat creates or updates a chat in the database
+func (m *MessageDB) UpsertChat(chat *StoredChat) error {
+	query := `INSERT OR REPLACE INTO chats 
+		(jid, name, is_group, last_message_id, last_message_time, unread_count, updated_at) 
+		VALUES (?, ?, ?, ?, ?, 0, ?)`
+
+	_, err := m.db.Exec(query,
+		chat.JID,
+		chat.Name,
+		chat.IsGroup,
+		chat.LastMessageID,
+		chat.LastMessageTime,
+		chat.UpdatedAt,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to upsert chat: %v", err)
+	}
+
+	return nil
 }
 
 // StoredChat represents a chat stored in database
@@ -144,7 +307,7 @@ func (m *MessageDB) StoreMessageFromEvent(evt *events.Message) error {
 
 	quotedID := ""
 	// Extract quoted message ID if available
-	if evt.Message.GetExtendedTextMessage() != nil && 
+	if evt.Message.GetExtendedTextMessage() != nil &&
 		evt.Message.GetExtendedTextMessage().GetContextInfo() != nil &&
 		evt.Message.GetExtendedTextMessage().GetContextInfo().GetStanzaID() != "" {
 		quotedID = evt.Message.GetExtendedTextMessage().GetContextInfo().GetStanzaID()
@@ -197,7 +360,7 @@ func (m *MessageDB) StoreMessage(msg *waProto.WebMessageInfo) error {
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	quotedID := ""
-	if msg.Message != nil && msg.Message.ExtendedTextMessage != nil && 
+	if msg.Message != nil && msg.Message.ExtendedTextMessage != nil &&
 		msg.Message.ExtendedTextMessage.ContextInfo != nil &&
 		msg.Message.ExtendedTextMessage.ContextInfo.StanzaID != nil {
 		quotedID = *msg.Message.ExtendedTextMessage.ContextInfo.StanzaID

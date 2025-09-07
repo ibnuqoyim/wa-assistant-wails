@@ -162,6 +162,20 @@
         <h4>{{ testResult.success ? 'Success!' : 'Error' }}</h4>
         <p>{{ testResult.message }}</p>
       </div>
+
+      <!-- Save Configuration Button -->
+      <div class="setting-group">
+        <button 
+          @click="saveConfiguration" 
+          class="save-config-btn"
+          :disabled="isSaving"
+        >
+          {{ isSaving ? 'Saving...' : 'Save Configuration' }}
+        </button>
+        <div v-if="saveResult" class="save-result" :class="saveResult.success ? 'success' : 'error'">
+          {{ saveResult.message }}
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -206,6 +220,36 @@ const validatePhoneNumber = (number: string): boolean => {
 
 const testing = ref(false)
 const testResult = ref<{success: boolean, message: string} | null>(null)
+
+const isSaving = ref(false)
+const saveResult = ref<{success: boolean, message: string} | null>(null)
+
+// Function to save configuration to persistent storage
+const saveConfiguration = async () => {
+  isSaving.value = true
+  saveResult.value = null
+  
+  try {
+    await UpdateAutoReplyConfig(config.value)
+    saveResult.value = {
+      success: true,
+      message: 'Configuration saved successfully'
+    }
+  } catch (error) {
+    saveResult.value = {
+      success: false,
+      message: `Failed to save configuration: ${error}`
+    }
+  } finally {
+    isSaving.value = false
+    // Hide success message after 3 seconds
+    if (saveResult.value?.success) {
+      setTimeout(() => {
+        saveResult.value = null
+      }, 3000)
+    }
+  }
+}
 
 onMounted(async () => {
   try {
@@ -547,5 +591,49 @@ input:checked + .slider:before {
 .test-result p {
   margin: 0;
   font-size: 13px;
+}
+
+/* Save Configuration Button */
+.save-config-btn {
+  width: 100%;
+  padding: 12px 20px;
+  background: var(--brand);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 10px;
+}
+
+.save-config-btn:hover:not(:disabled) {
+  background: #059669;
+}
+
+.save-config-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.save-result {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 14px;
+  transition: opacity 0.3s;
+}
+
+.save-result.success {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #10b981;
+}
+
+.save-result.error {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #ef4444;
 }
 </style>

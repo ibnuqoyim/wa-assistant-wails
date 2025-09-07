@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -141,7 +139,6 @@ func (arm *AutoReplyManager) ProcessIncomingMessage(evt *events.Message, manager
 
 // shouldReply determines if we should reply to this message
 func (arm *AutoReplyManager) shouldReply(evt *events.Message) bool {
-	fmt.Println(arm.config)
 	if arm.config == nil || !arm.config.Enabled {
 		return false
 	}
@@ -327,7 +324,7 @@ type OllamaResponse struct {
 // generateOllamaResponse generates response using Ollama API with enhanced error handling
 func (arm *AutoReplyManager) generateOllamaResponse(messageText string) (string, error) {
 	if arm.config.OllamaURL == "" {
-		return "", fmt.Errorf("Ollama URL not configured")
+		return "", fmt.Errorf("ollama URL not configured")
 	}
 
 	prompt := fmt.Sprintf("%s\n\nUser: %s\nAssistant:", arm.config.SystemPrompt, messageText)
@@ -373,11 +370,11 @@ func (arm *AutoReplyManager) generateOllamaResponse(messageText string) (string,
 	case http.StatusNotFound:
 		return "", fmt.Errorf("model '%s' not found in Ollama", arm.config.OllamaModel)
 	case http.StatusInternalServerError:
-		return "", fmt.Errorf("Ollama internal error: %s", string(body))
+		return "", fmt.Errorf("ollama internal error: %s", string(body))
 	case http.StatusServiceUnavailable:
-		return "", fmt.Errorf("Ollama service unavailable")
+		return "", fmt.Errorf("ollama service unavailable")
 	default:
-		return "", fmt.Errorf("Ollama API error (status %d): %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("ollama API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
 	var ollamaResp OllamaResponse
@@ -427,53 +424,22 @@ func (arm *AutoReplyManager) IsWhitelisted(jid types.JID) bool {
 	return false
 }
 
-// SaveConfig saves the auto-reply configuration to a JSON file
-func (arm *AutoReplyManager) SaveConfig(configPath string) error {
+// SaveConfig saves the auto-reply configuration to the database
+func (arm *AutoReplyManager) SaveConfig(db *MessageDB) error {
 	if arm.config == nil {
 		return fmt.Errorf("no configuration to save")
 	}
 
-	// Create directory if it doesn't exist
-	dir := filepath.Dir(configPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to create config directory: %v", err)
-	}
-
-	// Marshal configuration to JSON
-	data, err := json.MarshalIndent(arm.config, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal config: %v", err)
-	}
-
-	// Write to file
-	if err := os.WriteFile(configPath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write config file: %v", err)
-	}
-
-	return nil
+	return db.SaveConfig(arm.config)
 }
 
-// LoadConfig loads the auto-reply configuration from a JSON file
-func (arm *AutoReplyManager) LoadConfig(configPath string) error {
-	// Check if file exists
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		// File doesn't exist, use default config
-		arm.config = GetDefaultAutoReplyConfig()
-		return nil
-	}
-
-	// Read file
-	data, err := os.ReadFile(configPath)
+// LoadConfig loads the auto-reply configuration from the database
+func (arm *AutoReplyManager) LoadConfig(db *MessageDB) error {
+	config, err := db.LoadConfig()
 	if err != nil {
-		return fmt.Errorf("failed to read config file: %v", err)
+		return fmt.Errorf("failed to load config from database: %v", err)
 	}
 
-	// Unmarshal JSON
-	var config AutoReplyConfig
-	if err := json.Unmarshal(data, &config); err != nil {
-		return fmt.Errorf("failed to parse config file: %v", err)
-	}
-
-	arm.config = &config
+	arm.config = config
 	return nil
 }
