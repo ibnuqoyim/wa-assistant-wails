@@ -328,21 +328,27 @@ const updateWhitelist = async () => {
 
 <style scoped>
 .settings-screen {
-  padding: 20px;
-  max-width: 800px;
-  margin: 0 auto;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background: var(--panel);
-  min-height: 100vh;
 }
 
 .settings-header {
-  margin-bottom: 30px;
-  text-align: center;
+  padding: 24px 32px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--panel-3);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .settings-header h2 {
   color: var(--text);
   margin-bottom: 8px;
+  font-size: 24px;
 }
 
 .settings-header p {
@@ -351,50 +357,76 @@ const updateWhitelist = async () => {
 }
 
 .settings-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px;
   display: flex;
   flex-direction: column;
-  gap: 25px;
+  gap: 24px;
+}
+
+.settings-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.settings-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settings-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.settings-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .setting-group {
   background: var(--panel-2);
-  padding: 20px;
-  border-radius: 12px;
+  padding: 24px;
+  border-radius: 16px;
   border: 1px solid var(--panel-3);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.setting-group:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 .setting-group h3 {
   color: var(--text);
-  margin-bottom: 12px;
-  font-size: 16px;
+  margin-bottom: 16px;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .setting-group p {
   color: var(--muted);
-  font-size: 13px;
-  margin-bottom: 15px;
+  font-size: 14px;
+  margin-bottom: 20px;
+  line-height: 1.5;
 }
 
 .setting-item {
   display: flex;
   align-items: center;
-  gap: 15px;
-}
-
-.setting-info h3 {
-  margin: 0 0 4px 0;
-}
-
-.setting-info p {
-  margin: 0;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--panel);
+  border-radius: 12px;
+  margin-bottom: 16px;
 }
 
 /* Switch Toggle */
 .switch {
   position: relative;
   display: inline-block;
-  width: 50px;
-  height: 24px;
+  width: 52px;
+  height: 26px;
+  flex-shrink: 0;
 }
 
 .switch input {
@@ -411,19 +443,19 @@ const updateWhitelist = async () => {
   right: 0;
   bottom: 0;
   background-color: var(--panel-3);
-  transition: .4s;
-  border-radius: 24px;
+  transition: .3s;
+  border-radius: 26px;
 }
 
 .slider:before {
   position: absolute;
   content: "";
-  height: 18px;
-  width: 18px;
+  height: 20px;
+  width: 20px;
   left: 3px;
   bottom: 3px;
   background-color: white;
-  transition: .4s;
+  transition: .3s;
   border-radius: 50%;
 }
 
@@ -439,37 +471,42 @@ input:checked + .slider:before {
 .radio-group {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .radio-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   cursor: pointer;
-  padding: 8px;
-  border-radius: 6px;
-  transition: background-color 0.2s;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--panel);
+  transition: all 0.2s;
 }
 
 .radio-item:hover {
   background: var(--hover);
+  transform: translateY(-1px);
 }
 
 .radio-item input[type="radio"] {
+  width: 20px;
+  height: 20px;
   margin: 0;
+  cursor: pointer;
 }
 
 /* Input Groups */
 .input-group {
-  margin-bottom: 15px;
+  margin-bottom: 20px;
 }
 
 .input-group label {
   display: block;
   color: var(--text);
   font-weight: 500;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   font-size: 14px;
 }
 
@@ -477,12 +514,19 @@ input:checked + .slider:before {
 .input-group select,
 .input-group textarea {
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--panel-3);
-  border-radius: 6px;
+  padding: 12px 16px;
+  border: 2px solid var(--panel-3);
+  border-radius: 12px;
   background: var(--panel);
   color: var(--text);
   font-size: 14px;
+  transition: all 0.2s;
+}
+
+.input-group input:hover,
+.input-group select:hover,
+.input-group textarea:hover {
+  border-color: var(--brand);
 }
 
 .input-group input:focus,
@@ -490,18 +534,19 @@ input:checked + .slider:before {
 .input-group textarea:focus {
   outline: none;
   border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
 }
 
 /* Whitelist */
 .whitelist-container {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .whitelist-item {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
 }
 
@@ -510,8 +555,8 @@ input:checked + .slider:before {
 }
 
 .remove-btn {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border: none;
   background: var(--error);
   color: white;
@@ -521,42 +566,49 @@ input:checked + .slider:before {
   align-items: center;
   justify-content: center;
   font-size: 18px;
-  line-height: 1;
+  transition: all 0.2s;
 }
 
 .remove-btn:hover {
   background: #dc2626;
+  transform: scale(1.1);
 }
 
 .add-btn {
-  padding: 10px 15px;
-  border: 1px dashed var(--panel-3);
+  padding: 12px 16px;
+  border: 2px dashed var(--panel-3);
   background: transparent;
   color: var(--muted);
-  border-radius: 6px;
+  border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s;
+  font-weight: 500;
 }
 
 .add-btn:hover {
   border-color: var(--brand);
   color: var(--brand);
+  transform: translateY(-1px);
 }
 
 /* Test Button */
 .test-btn {
-  padding: 10px 20px;
+  width: 100%;
+  padding: 12px 24px;
   background: var(--brand);
-  color: var(--panel);
+  color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 12px;
   cursor: pointer;
-  font-weight: 500;
-  transition: background-color 0.2s;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.2s;
 }
 
 .test-btn:hover:not(:disabled) {
   background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.2);
 }
 
 .test-btn:disabled {
@@ -566,31 +618,34 @@ input:checked + .slider:before {
 
 /* Test Result */
 .test-result {
-  padding: 15px;
-  border-radius: 8px;
-  margin-top: 15px;
+  padding: 16px;
+  border-radius: 12px;
+  margin-top: 16px;
+  transition: all 0.2s;
 }
 
 .test-result.success {
   background: #d1fae5;
-  border: 1px solid #10b981;
+  border: 2px solid #10b981;
   color: #065f46;
 }
 
 .test-result.error {
   background: #fee2e2;
-  border: 1px solid #ef4444;
+  border: 2px solid #ef4444;
   color: #991b1b;
 }
 
 .test-result h4 {
   margin: 0 0 8px 0;
-  font-size: 14px;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .test-result p {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 /* Save Configuration Button */
