@@ -73,10 +73,10 @@ export namespace whatsapp {
 	export class Contact {
 	    jid: string;
 	    name: string;
+	    profilePicUrl: string;
 	    phoneNumber: string;
 	    pushName: string;
 	    businessName: string;
-	    profilePicUrl: string;
 	    isGroup: boolean;
 	    isBusiness: boolean;
 	    lastSeen: string;
@@ -89,10 +89,10 @@ export namespace whatsapp {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.jid = source["jid"];
 	        this.name = source["name"];
+	        this.profilePicUrl = source["profilePicUrl"];
 	        this.phoneNumber = source["phoneNumber"];
 	        this.pushName = source["pushName"];
 	        this.businessName = source["businessName"];
-	        this.profilePicUrl = source["profilePicUrl"];
 	        this.isGroup = source["isGroup"];
 	        this.isBusiness = source["isBusiness"];
 	        this.lastSeen = source["lastSeen"];

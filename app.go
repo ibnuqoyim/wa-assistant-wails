@@ -34,17 +34,22 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
-	// Test event emission to verify frontend communication
-	fmt.Println("App startup - testing event emission...")
 	runtime.EventsEmit(ctx, "app:startup", "Application started successfully")
 
 	// Start listening for WhatsApp events
 	if a.waManager != nil {
-		fmt.Println("Starting WhatsApp event listener...")
 		go a.listenForWhatsAppEvents()
 	} else {
 		fmt.Println("WhatsApp manager is nil!")
 	}
+}
+
+// GetContacts returns the list of WhatsApp contacts
+func (a *App) GetContacts() ([]whatsapp.Contact, error) {
+	if a.waManager == nil {
+		return nil, fmt.Errorf("WhatsApp manager is not initialized")
+	}
+	return a.waManager.GetContacts()
 }
 
 // listenForWhatsAppEvents listens for events from WhatsApp manager and emits them to frontend
@@ -57,10 +62,7 @@ func (a *App) listenForWhatsAppEvents() {
 	for event := range eventChan {
 		switch event.Type {
 		case "qr":
-			fmt.Println("Received QR code event:", event.Data)
-			fmt.Println("Emitting whatsapp:qr event to frontend...")
 			runtime.EventsEmit(a.ctx, "whatsapp:qr", event.Data)
-			fmt.Println("Event emitted successfully")
 		case "connected":
 			runtime.EventsEmit(a.ctx, "whatsapp:connected", event.Message)
 		case "disconnected":
@@ -99,8 +101,6 @@ func (a *App) StartNewConnection() error {
 	if a.waManager == nil {
 		return fmt.Errorf("WhatsApp manager not initialized")
 	}
-
-	fmt.Println("App: Starting new WhatsApp connection...")
 	err := a.waManager.StartNewConnection()
 	if err != nil {
 		fmt.Printf("App: Error starting connection: %v\n", err)
@@ -155,11 +155,6 @@ func (a *App) GetChats() ([]whatsapp.Chat, error) {
 	return a.waManager.GetChats()
 }
 
-// GetMessages retrieves messages for a specific chat
-func (a *App) GetMessages(chatID string) ([]whatsapp.Message, error) {
-	return a.waManager.GetMessages(chatID)
-}
-
 // Auto-reply methods
 
 // GetAutoReplyConfig gets the current auto-reply configuration
@@ -176,53 +171,6 @@ func (a *App) UpdateAutoReplyConfig(config *whatsapp.AutoReplyConfig) error {
 		return fmt.Errorf("WhatsApp manager not initialized")
 	}
 	return a.waManager.UpdateAutoReplyConfig(config)
-}
-
-// TestAIConnection tests the AI connection with current config
-func (a *App) TestAIConnection(provider string) (string, error) {
-	return a.waManager.TestAIConnection(provider)
-}
-
-// GetContacts retrieves all WhatsApp contacts
-func (a *App) GetContacts() ([]whatsapp.Contact, error) {
-	return a.waManager.GetContacts()
-}
-
-// GetContactInfo retrieves information about a specific contact
-func (a *App) GetContactInfo(jid string) (*whatsapp.ContactInfo, error) {
-	return a.waManager.GetContactInfo(jid)
-}
-
-// Scheduler methods
-
-// AddScheduledTask adds a new scheduled task
-func (a *App) AddScheduledTask(task *whatsapp.ScheduledTask) error {
-	return a.waManager.AddScheduledTask(task)
-}
-
-// RemoveScheduledTask removes a scheduled task
-func (a *App) RemoveScheduledTask(taskID string) error {
-	return a.waManager.RemoveScheduledTask(taskID)
-}
-
-// GetScheduledTask retrieves a scheduled task by ID
-func (a *App) GetScheduledTask(taskID string) (*whatsapp.ScheduledTask, error) {
-	return a.waManager.GetScheduledTask(taskID)
-}
-
-// GetAllScheduledTasks retrieves all scheduled tasks
-func (a *App) GetAllScheduledTasks() []*whatsapp.ScheduledTask {
-	return a.waManager.GetAllScheduledTasks()
-}
-
-// UpdateScheduledTask updates an existing scheduled task
-func (a *App) UpdateScheduledTask(taskID string, task *whatsapp.ScheduledTask) error {
-	return a.waManager.UpdateScheduledTask(taskID, task)
-}
-
-// GetSchedulerStats returns scheduler statistics
-func (a *App) GetSchedulerStats() map[string]interface{} {
-	return a.waManager.GetSchedulerStats()
 }
 
 func (a *App) SendMessage(chatID, text string) error {
